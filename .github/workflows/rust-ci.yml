@@ -28,3 +28,7 @@ on:
 
       - name: Run Clippy
         run: cargo clippy -- -D warnings
+
+  push-image:
+    needs: build
+    uses: neurothena/github/.github/workflows/push-image.yml
