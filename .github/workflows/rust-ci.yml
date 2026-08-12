@@ -39,6 +39,6 @@ jobs:
     - name: Run Clippy
       run: cargo clippy -- -D warnings
 
-  push-image:
+  docker-image:
     needs: build
     uses: neurothena/github/.github/workflows/docker-image.yml@main
