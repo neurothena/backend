@@ -6,10 +6,6 @@ on:
   pull_request:
     branches: [ "main" ]
 
-permissions:
-  contents: read
-  packages: write
-
 env:
   CARGO_TERM_COLOR: always
 
@@ -40,5 +36,9 @@ jobs:
       run: cargo clippy -- -D warnings
 
   docker-image:
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     needs: build
     uses: neurothena/github/.github/workflows/docker-image.yml@main
