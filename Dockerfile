@@ -18,10 +18,11 @@ RUN cargo build --release
 
 FROM debian:bookworm-slim AS backend
 COPY --from=builder /app/target/release/backend /usr/local/bin/backend
+EXPOSE 3000
 CMD [ "backend" ]
 
 FROM rust:latest AS migrate
 RUN cargo install diesel_cli --no-default-features --features postgres
 WORKDIR /app
-COPY migrations ./migrations
+COPY . .
 CMD ["diesel", "migration", "run"]
