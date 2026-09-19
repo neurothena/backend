@@ -16,6 +16,12 @@ COPY --from=cacher /app/target target
 COPY --from=cacher /usr/local/cargo /usr/local/cargo
 RUN cargo build --release
 
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim AS backend
 COPY --from=builder /app/target/release/backend /usr/local/bin/backend
 CMD [ "backend" ]
+
+FROM rust:latest AS migrate
+RUN cargo install diesel_cli --no-default-features --features postgres
+WORKDIR /app
+COPY migrations ./migrations
+CMD ["diesel", "migration", "run"]
