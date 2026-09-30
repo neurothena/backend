@@ -17,3 +17,7 @@ oauth2 = "5.0.0"
 oauth-axum = "0.1.4"
 axum_responses = "0.5.5"
 argon2 = { version = "0.6.0", features = ["password-hash", "rand_core"] }
+jsonwebtoken = "11.1.0"
+axum-extra = { version = "0.12.6", features = ["cookie"] }
+chrono = "0.4.45"
+strum = { version = "0.28.0", features = ["derive"] }

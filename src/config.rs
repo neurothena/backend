@@ -5,6 +5,7 @@ use serde::Deserialize;
 pub struct Config {
     pub database_url: String,
     pub argon2_pepper: String,
+    pub jwt_secret: String,
 }
 
 impl Config {

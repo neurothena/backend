@@ -12,9 +12,9 @@ use crate::state::AppState;
 
 #[derive(Deserialize)]
 pub(super) struct CreateUserDTO {
-    email: String,
-    username: String,
-    password: String,
+    pub email: String,
+    pub username: String,
+    pub password: String,
 }
 
 pub(super) async fn create_user(
