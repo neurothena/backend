@@ -4,6 +4,7 @@ use serde::Deserialize;
 #[derive(Clone, Deserialize)]
 pub struct Config {
     pub database_url: String,
+    pub argon2_pepper: String,
 }
 
 impl Config {

@@ -1,9 +1,10 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    users (email) {
+    users (id) {
         email -> Text,
         username -> Text,
         password_hash -> Text,
+        id -> Int4,
     }
 }

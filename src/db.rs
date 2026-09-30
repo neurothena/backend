@@ -1,5 +1,8 @@
-use diesel_async::{AsyncPgConnection, pooled_connection::{AsyncDieselConnectionManager, bb8::Pool}};
 use crate::{config::Config, error::DatabaseError};
+use diesel_async::{
+    AsyncPgConnection,
+    pooled_connection::{AsyncDieselConnectionManager, bb8::Pool},
+};
 
 pub type DbPool = Pool<AsyncPgConnection>;
 
@@ -11,5 +14,7 @@ pub async fn create_pool(config: &Config) -> Result<DbPool, DatabaseError> {
     Pool::builder()
         .build(diesel_config)
         .await
-        .map_err(|_| DatabaseError::ConnectionError { db_url: connection_url.to_string() })
+        .map_err(|_| DatabaseError::ConnectionError {
+            db_url: connection_url.to_string(),
+        })
 }

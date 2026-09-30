@@ -13,3 +13,7 @@ envy = "0.4"
 tokio = { version = "1.53.1", features = ["full"] }
 axum = "0.8.9"
 thiserror = "2.0.20"
+oauth2 = "5.0.0"
+oauth-axum = "0.1.4"
+axum_responses = "0.5.5"
+argon2 = { version = "0.6.0", features = ["password-hash", "rand_core"] }

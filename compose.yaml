@@ -12,19 +12,20 @@ services:
                 condition: service_healthy
 
     backend:
-        build: 
+        build:
             context: .
             target: backend
         environment:
             DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/${POSTGRES_DB}
+            ARGON2_PEPPER: ${ARGON2_PEPPER}
         depends_on:
             timescaledb:
                 condition: service_healthy
             migrate:
                 condition: service_completed_successfully
         ports:
-            - "80:3000"
-  
+            - "8080:3000"
+
     timescaledb:
         image: timescale/timescaledb:latest-pg17
         environment:
