@@ -1,0 +1,1 @@
+DROP IF EXISTS TABLE user_jti;

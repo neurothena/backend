@@ -20,9 +20,10 @@ impl From<CreateUserDTO> for LoginDTO {
     }
 }
 
-// pub(super) fn login(
-//     State(state): State<AppState>,
-//     Json(body): Json<LoginDTO>,
-// ) -> (CookieJar, JsonResponse) {
-
-// }
+pub(super) fn login(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Json(body): Json<LoginDTO>,
+) -> (CookieJar, JsonResponse) {
+    todo!()
+}

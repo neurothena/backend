@@ -1,0 +1,2 @@
+ALTER TABLE user_jti
+ADD COLUMN expires_at TIMESTAMP NOT NULL;
