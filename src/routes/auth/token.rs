@@ -1,85 +1,89 @@
+use std::sync::Arc;
+
 use axum::{
     extract::{Request, State},
     middleware::Next,
-    response::{IntoResponse, Response},
+    response::Response,
 };
 use axum_extra::extract::{
     CookieJar,
     cookie::{Cookie, SameSite},
 };
 use axum_responses::JsonResponse;
-use diesel::{Selectable, deserialize::Queryable};
-use serde::{Deserialize, Serialize};
 use time::Duration;
 
-use crate::{state::AppState};
+use crate::{
+    error::AppError,
+    infra::{
+        database::repositories::{Repositories, RepositoryProvider},
+        jwt::{error::JwtError, service::JwtService},
+    },
+    response::EndpointResult,
+};
 
-pub(super) async fn refresh(
-    State(state): State<AppState>,
+fn get_refresh_token(jar: &CookieJar) -> Result<&str, JwtError> {
+    Ok(jar
+        .get("jwt_refresh")
+        .ok_or(JwtError::InvalidRefreshError)?
+        .value())
+}
+
+fn get_access_token(jar: &CookieJar) -> Result<&str, JwtError> {
+    Ok(jar
+        .get("jwt_access")
+        .ok_or(JwtError::InvalidAccessError)?
+        .value())
+}
+
+pub(super) fn create_token_cookies(
     jar: CookieJar,
-) -> (CookieJar, JsonResponse) {
-    let previous_refresh_token = match jar.get("jwt_refresh") {
-        Some(token) => token.value(),
-        None => {
-            return (
-                jar,
-                JsonResponse::Unauthorized().message("Missing refresh token"),
-            );
-        }
-    };
+    (access, refresh): (String, String),
+) -> CookieJar {
+    jar.add(
+        Cookie::build(("jwt_access", access))
+            .path("/")
+            .same_site(SameSite::Strict)
+            .http_only(true)
+            .secure(true)
+            .max_age(Duration::minutes(15))
+            .build(),
+    )
+    .add(
+        Cookie::build(("jwt_refresh", refresh))
+            .path("/")
+            .same_site(SameSite::Strict)
+            .http_only(true)
+            .secure(true)
+            .max_age(Duration::days(30))
+            .build(),
+    )
+}
 
-    let (access_token, refresh_token) = match state.regenerate_tokens(previous_refresh_token).await
-    {
-        Ok(pair) => pair,
-        Err(err) => {
-            return (jar, JsonResponse::Unauthorized().error(err.to_string()));
-        }
-    };
+pub(super) async fn refresh<P: RepositoryProvider>(
+    State(jwt_service): State<JwtService>,
+    State(repositories): State<Arc<Repositories<P>>>,
+    jar: CookieJar,
+) -> EndpointResult {
+    let previous_refresh_token = get_refresh_token(&jar)?;
 
-    let jar = jar
-        .add(
-            Cookie::build(("jwt_access", access_token))
-                .path("/")
-                .same_site(SameSite::Strict)
-                .http_only(true)
-                .secure(true)
-                .max_age(Duration::minutes(15))
-                .build(),
-        )
-        .add(
-            Cookie::build(("jwt_refresh", refresh_token))
-                .path("/")
-                .same_site(SameSite::Strict)
-                .http_only(true)
-                .secure(true)
-                .max_age(Duration::days(30))
-                .build(),
-        );
+    let (access_token, refresh_token) = jwt_service
+        .regenerate_tokens(previous_refresh_token, &repositories.user_jti)
+        .await?;
 
-    (jar, JsonResponse::Ok())
+    let jar = create_token_cookies(jar, (access_token, refresh_token));
+
+    Ok((jar, JsonResponse::Ok()).into())
 }
 
 pub(super) async fn authorize(
-    State(state): State<AppState>,
+    State(jwt_service): State<JwtService>,
     jar: CookieJar,
     req: Request,
     next: Next,
-) -> Response {
-    let access_token = match jar.get("jwt_access") {
-        Some(cookie) => cookie.value(),
-        None => {
-            return (
-                jar,
-                JsonResponse::Unauthorized().message("Missing JWT access token"),
-            )
-            .into_response();
-        }
-    };
+) -> Result<Response, AppError> {
+    let access_token = get_access_token(&jar)?;
 
-    if let Err(_) = &state.jwt_service.verify(access_token) {
-        return (jar, JsonResponse::Unauthorized().message("Missing JWT access token")).into_response();
-    }
-    else {
-        return next.run(req).await;
-    }
+    jwt_service.verify(access_token)?;
+
+    Ok(next.run(req).await)
 }

@@ -152,6 +152,7 @@ name = "backend"
 version = "0.1.0"
 dependencies = [
  "argon2",
+ "async-trait",
  "axum",
  "axum-extra",
  "axum_responses",

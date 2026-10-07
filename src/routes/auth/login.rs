@@ -1,9 +1,9 @@
-use axum::{Json, extract::State};
+use axum::Json;
 use axum_extra::extract::CookieJar;
 use axum_responses::JsonResponse;
 use serde::Deserialize;
 
-use crate::{routes::auth::register::CreateUserDTO, state::AppState};
+use crate::routes::auth::register::CreateUserDTO;
 
 #[derive(Deserialize)]
 pub(super) struct LoginDTO {
@@ -20,10 +20,6 @@ impl From<CreateUserDTO> for LoginDTO {
     }
 }
 
-pub(super) fn login(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    Json(body): Json<LoginDTO>,
-) -> (CookieJar, JsonResponse) {
+pub(super) fn login(_jar: CookieJar, Json(_body): Json<LoginDTO>) -> (CookieJar, JsonResponse) {
     todo!()
 }

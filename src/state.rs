@@ -1,37 +1,55 @@
 use std::sync::Arc;
 
+use axum::extract::FromRef;
+
 use crate::{
     config::Config,
-    db::DbPool,
-    jwt::service::{JwtError, JwtService},
+    infra::{
+        database::repositories::{Repositories, RepositoryProvider},
+        jwt::service::JwtService,
+    },
 };
 
-#[derive(Clone)]
-pub struct AppState {
-    pub db_pool: DbPool,
+pub struct AppState<P: RepositoryProvider + 'static> {
+    pub repositories: Arc<Repositories<P>>,
     pub config: Arc<Config>,
     pub jwt_service: JwtService,
 }
 
-impl AppState {
-    pub fn new(db_pool: DbPool, config: Arc<Config>) -> Self {
+impl<P: RepositoryProvider> AppState<P> {
+    pub fn new(repos: Repositories<P>, config: Arc<Config>) -> Self {
         Self {
-            db_pool,
+            repositories: Arc::new(repos),
             jwt_service: JwtService::new(&config),
             config,
         }
     }
+}
 
-    pub async fn create_token_pair(&self, subject: &str) -> Result<(String, String), JwtError> {
-        self.jwt_service.create_token_pair(subject, self).await
+impl<P: RepositoryProvider + 'static> Clone for AppState<P> {
+    fn clone(&self) -> Self {
+        Self {
+            jwt_service: self.jwt_service.clone(),
+            repositories: self.repositories.clone(),
+            config: self.config.clone(),
+        }
     }
+}
 
-    pub async fn regenerate_tokens(
-        &self,
-        refresh_token: &str,
-    ) -> Result<(String, String), JwtError> {
-        self.jwt_service
-            .regenerate_tokens(refresh_token, self)
-            .await
+impl<P: RepositoryProvider> FromRef<AppState<P>> for Arc<Config> {
+    fn from_ref(state: &AppState<P>) -> Self {
+        state.config.clone()
+    }
+}
+
+impl<P: RepositoryProvider> FromRef<AppState<P>> for JwtService {
+    fn from_ref(state: &AppState<P>) -> Self {
+        state.jwt_service.clone()
+    }
+}
+
+impl<P: RepositoryProvider> FromRef<AppState<P>> for Arc<Repositories<P>> {
+    fn from_ref(state: &AppState<P>) -> Self {
+        state.repositories.clone()
     }
 }

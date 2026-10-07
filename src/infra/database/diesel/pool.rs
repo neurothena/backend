@@ -1,4 +1,4 @@
-use crate::{config::Config, error::DatabaseError};
+use crate::{config::Config, infra::database::error::DatabaseError};
 use diesel_async::{
     AsyncPgConnection,
     pooled_connection::{AsyncDieselConnectionManager, bb8::Pool},

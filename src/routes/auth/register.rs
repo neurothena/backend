@@ -1,19 +1,23 @@
 use std::sync::Arc;
 
-use crate::schema::users::{self};
+use crate::{
+    config::Config,
+    error::AppError,
+    infra::{
+        database::{
+            models::users::NewUser,
+            repositories::{Repositories, RepositoryProvider, users::UserRepository},
+        },
+        jwt::service::JwtService,
+    },
+    response::EndpointResult,
+    routes::auth::token::create_token_cookies,
+};
 use argon2::{Algorithm, Argon2, Params, PasswordHasher, Version};
 use axum::{Json, extract::State};
-use axum_extra::extract::{
-    CookieJar,
-    cookie::{Cookie, SameSite},
-};
+use axum_extra::extract::CookieJar;
 use axum_responses::JsonResponse;
-use diesel::{ExpressionMethods, query_dsl::methods::FilterDsl};
-use diesel_async::RunQueryDsl;
 use serde::Deserialize;
-use time::Duration;
-
-use crate::state::AppState;
 
 #[derive(Deserialize)]
 pub(super) struct CreateUserDTO {
@@ -22,47 +26,9 @@ pub(super) struct CreateUserDTO {
     pub password: String,
 }
 
-pub(super) async fn create_user(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    Json(body): Json<CreateUserDTO>,
-) -> (CookieJar, JsonResponse) {
-    let mut connection = match state.db_pool.get().await {
-        Ok(conn) => conn,
-        Err(e) => {
-            return (
-                jar,
-                JsonResponse::InternalServerError().error(e.to_string()),
-            );
-        }
-    };
-
-    let email_exists: bool = match diesel::select(diesel::dsl::exists(
-        users::table.filter(users::email.eq(&body.email)),
-    ))
-    .get_result(&mut connection)
-    .await
-    {
-        Ok(exists) => exists,
-        Err(e) => {
-            return (
-                jar,
-                JsonResponse::InternalServerError().error(e.to_string()),
-            );
-        }
-    };
-
-    if email_exists {
-        return (
-            jar,
-            JsonResponse::Conflict().message("Email already registered"),
-        );
-    }
-
-    let config = Arc::clone(&state.config);
-    let password_to_hash = body.password.clone();
-    let password_hash_result = match tokio::task::spawn_blocking(
-        move || -> Result<String, argon2::password_hash::Error> {
+async fn hash_password(config: Arc<Config>, password: String) -> Result<String, AppError> {
+    Ok(
+        tokio::task::spawn_blocking(move || -> Result<String, argon2::password_hash::Error> {
             let argon2 = Argon2::new_with_secret(
                 config.argon2_pepper.as_bytes(),
                 Algorithm::default(),
@@ -70,67 +36,37 @@ pub(super) async fn create_user(
                 Params::default(),
             )?;
 
-            let result = argon2
-                .hash_password(password_to_hash.as_bytes())?
-                .to_string();
+            let result = argon2.hash_password(password.as_bytes())?.to_string();
 
             Ok(result)
-        },
+        })
+        .await??,
     )
-    .await
-    {
-        Ok(result) => result,
-        Err(_) => return (jar, JsonResponse::InternalServerError()),
-    };
+}
 
-    let password_hash = match password_hash_result {
-        Ok(hash) => hash,
-        Err(_) => return (jar, JsonResponse::InternalServerError()),
-    };
+pub(super) async fn create_user<P: RepositoryProvider>(
+    State(config): State<Arc<Config>>,
+    State(repositories): State<Arc<Repositories<P>>>,
+    State(jwt_service): State<JwtService>,
+    jar: CookieJar,
+    Json(body): Json<CreateUserDTO>,
+) -> EndpointResult {
+    let password_hash = hash_password(config.clone(), body.password.clone()).await?;
 
-    let result = diesel::insert_into(users::table)
-        .values((
-            users::email.eq(&body.email),
-            users::username.eq(body.username),
-            users::password_hash.eq(password_hash),
-        ))
-        .execute(&mut connection)
-        .await;
+    repositories
+        .users
+        .insert(NewUser {
+            email: body.email.clone(),
+            username: body.username,
+            password_hash,
+        })
+        .await?;
 
-    match result {
-        Ok(_) => {
-            let (access_token, refresh_token) = match state.create_token_pair(&body.email).await {
-                Ok(pair) => pair,
-                Err(err) => {
-                    return (
-                        jar,
-                        JsonResponse::InternalServerError().error(err.to_string()),
-                    );
-                }
-            };
+    let tokens = jwt_service
+        .create_token_pair(&body.email, &repositories.user_jti)
+        .await?;
 
-            let jar = jar
-                .add(
-                    Cookie::build(("jwt_access", access_token))
-                        .path("/")
-                        .same_site(SameSite::Strict)
-                        .http_only(true)
-                        .secure(true)
-                        .max_age(Duration::minutes(15))
-                        .build(),
-                )
-                .add(
-                    Cookie::build(("jwt_refresh", refresh_token))
-                        .path("/")
-                        .same_site(SameSite::Strict)
-                        .http_only(true)
-                        .secure(true)
-                        .max_age(Duration::days(30))
-                        .build(),
-                );
+    let jar = create_token_cookies(jar, tokens);
 
-            return (jar, JsonResponse::Created());
-        }
-        Err(e) => (jar, JsonResponse::BadRequest().error(e.to_string())),
-    }
+    Ok((jar, JsonResponse::Created()).into())
 }
